@@ -1,0 +1,239 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>codebuddy2api</title>
+  <style>
+    :root{--bg:#f4f6f8;--panel:#fff;--line:#d9dee7;--text:#17202a;--muted:#667085;--blue:#1769e0;--red:#c53b3b;--shadow:0 1px 2px rgba(16,24,40,.05)}
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Arial,sans-serif;margin:0;background:var(--bg);color:var(--text);font-size:14px}
+    header{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+    .wrap{max-width:1240px;margin:0 auto;padding:18px 22px}
+    .top{display:flex;align-items:center;justify-content:space-between;gap:16px}
+    h1{font-size:20px;margin:0}
+    h2{font-size:15px;margin:0 0 12px}
+    p{margin:0}.muted{color:var(--muted)}
+    main{max-width:1240px;margin:auto;padding:18px 22px 40px}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    .split{display:grid;grid-template-columns:1.2fr .8fr;gap:14px}
+    .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
+    .stat,section{background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow)}
+    .stat{padding:14px}.stat b{display:block;font-size:24px;margin-top:3px}
+    section{padding:16px;margin:14px 0}
+    label{display:block;font-size:12px;font-weight:650;color:#475467;margin:0 0 5px}
+    input,textarea,select{width:100%;padding:9px 10px;border:1px solid #c9d0da;border-radius:6px;background:#fff;color:var(--text)}
+    textarea{min-height:84px;font-family:ui-monospace,Consolas,monospace;resize:vertical}
+    button{min-height:36px;padding:8px 12px;border:1px solid transparent;border-radius:6px;background:var(--blue);color:#fff;cursor:pointer;font-weight:650}
+    button.secondary{background:#fff;color:#344054;border-color:#c9d0da}
+    button.danger{background:#fff;color:var(--red);border-color:#e6b8b8}
+    button:disabled{opacity:.55;cursor:not-allowed}
+    .tabs{display:flex;gap:6px;margin:14px 0}.tab{background:#e9edf3;color:#344054;border-color:#d7dde6}.tab.active{background:#17202a;color:#fff;border-color:#17202a}
+    .panel{display:none}.panel.active{display:block}
+    table{width:100%;border-collapse:collapse}th,td{padding:10px 8px;border-bottom:1px solid #edf0f4;text-align:left;vertical-align:top}
+    th{font-size:12px;color:#667085;font-weight:700;background:#fafbfc}td.actions{white-space:nowrap}
+    code,pre{font-family:ui-monospace,Consolas,monospace;background:#f0f2f5;border-radius:6px}code{padding:2px 5px}pre{padding:12px;overflow:auto;margin:0;line-height:1.45}
+    .pill{display:inline-flex;align-items:center;height:22px;border-radius:999px;padding:0 8px;font-size:12px;font-weight:700}
+    .pill.ok{background:#e7f6ee;color:#087443}.pill.warn{background:#fff4d6;color:#8a5a00}.pill.bad{background:#fdeaea;color:#b42318}
+    .toast{position:fixed;right:18px;bottom:18px;background:#17202a;color:#fff;padding:10px 12px;border-radius:7px;box-shadow:0 8px 24px rgba(16,24,40,.18);display:none;z-index:10}
+    .newkey{border:1px solid #acd8c0;background:#f0fbf5;border-radius:8px;padding:12px;margin-top:10px;display:none}
+    .errorbox{border:1px solid #f0b8b8;background:#fff2f2;color:#912018;border-radius:8px;padding:10px;margin-top:10px;display:none;white-space:pre-wrap}
+    @media (max-width:860px){.grid,.split,.stats{grid-template-columns:1fr}.top{align-items:flex-start}.hide-sm{display:none}table{font-size:13px}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="wrap top">
+    <div>
+      <h1>codebuddy2api</h1>
+      <p class="muted">CodeBuddy CN gateway with OpenAI and Codex-compatible endpoints.</p>
+    </div>
+    <div class="row">
+      <input id="admin" placeholder="Admin token" style="width:260px" />
+      <button onclick="saveToken()">Save</button>
+      <button class="secondary" onclick="loadAll()">Refresh</button>
+    </div>
+  </div>
+</header>
+<main>
+  <div class="stats">
+    <div class="stat"><span class="muted">Accounts</span><b id="statAccounts">0</b></div>
+    <div class="stat"><span class="muted">Active</span><b id="statActive">0</b></div>
+    <div class="stat"><span class="muted">Client Keys</span><b id="statKeys">0</b></div>
+    <div class="stat"><span class="muted">Total Tokens</span><b id="statTokens">0</b></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="accounts" onclick="showTab('accounts')">Accounts</button>
+    <button class="tab" data-tab="keys" onclick="showTab('keys')">API Keys</button>
+    <button class="tab" data-tab="codex" onclick="showTab('codex')">Codex Config</button>
+    <button class="tab" data-tab="logs" onclick="showTab('logs')">Logs</button>
+  </div>
+
+  <section id="panel-accounts" class="panel active">
+    <div class="split">
+      <div>
+        <h2>Upstream Accounts</h2>
+        <div style="overflow:auto"><table>
+          <thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Endpoint</th><th>Auth</th><th>Usage</th><th>Error</th><th></th></tr></thead>
+          <tbody id="accountsBody"></tbody>
+        </table></div>
+      </div>
+      <div>
+        <h2>Add CodeBuddy Account</h2>
+        <div class="grid">
+          <div><label>Name</label><input id="accName" value="codebuddy-api-key" /></div>
+          <div><label>Auth Type</label><select id="authType"><option value="api_key">api_key</option><option value="bearer">bearer</option></select></div>
+          <div><label>Endpoint</label><input id="endpoint" value="https://copilot.tencent.com" /></div>
+          <div><label>Domain</label><input id="domain" value="copilot.tencent.com" /></div>
+          <div><label>User ID</label><input id="userId" value="anonymous" /></div>
+          <div><label>Status</label><select id="status"><option value="active">active</option><option value="disabled">disabled</option></select></div>
+          <div><label>Weight</label><input id="weight" type="number" min="1" value="1" /></div>
+          <div><label>Priority</label><input id="priority" type="number" value="0" /></div>
+        </div>
+        <label>API Key or Access Token</label>
+        <textarea id="secret" placeholder="CodeBuddy API key or access token"></textarea>
+        <div class="row"><button onclick="addAccount()">Add Account</button><button class="secondary" onclick="resetAccountForm()">Reset</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="panel-keys" class="panel">
+    <div class="split">
+      <div>
+        <h2>Client API Keys</h2>
+        <div style="overflow:auto"><table>
+          <thead><tr><th>ID</th><th>Name</th><th>Prefix</th><th>Status</th><th>Limits</th><th>Usage</th><th></th></tr></thead>
+          <tbody id="keysBody"></tbody>
+        </table></div>
+      </div>
+      <div>
+        <h2>Create Key</h2>
+        <label>Name</label><input id="keyName" value="codex" />
+        <label>Allowed Models</label><input id="allowedModels" placeholder="Optional, comma separated" />
+        <label>Daily Limit</label><input id="dailyLimit" type="number" min="0" value="0" />
+        <button onclick="createKey()">Create Key</button>
+        <div id="newKeyBox" class="newkey">
+          <label>New key, shown once</label>
+          <pre id="newKey"></pre>
+          <button class="secondary" onclick="copyText(document.getElementById('newKey').textContent)">Copy Key</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="panel-codex" class="panel">
+    <h2>Codex / OpenAI Config</h2>
+    <div class="grid">
+      <div><label>Base URL</label><input id="baseUrl" /></div>
+      <div><label>API Key</label><input id="clientKeyForConfig" placeholder="sk-cb-..." /></div>
+    </div>
+    <div class="row" style="margin:10px 0">
+      <button onclick="copyCodexEnv()">Copy Env</button>
+      <button class="secondary" onclick="copyCodexJson()">Copy JSON</button>
+      <button class="secondary" onclick="testClientKey()">Test /v1/models</button>
+    </div>
+    <pre id="configPreview"></pre>
+  </section>
+
+  <section id="panel-logs" class="panel">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px">
+      <h2>Recent Requests</h2>
+      <button class="secondary" onclick="loadLogs()">Refresh Logs</button>
+    </div>
+    <div style="overflow:auto"><table>
+      <thead><tr><th>ID</th><th>Key</th><th>Account</th><th>Model</th><th>Stream</th><th>Tokens</th><th>Status</th><th>Finish</th><th>Duration</th><th>Error</th></tr></thead>
+      <tbody id="logsBody"></tbody>
+    </table></div>
+  </section>
+
+  <div id="errorBox" class="errorbox"></div>
+</main>
+<div id="toast" class="toast"></div>
+<script>
+let state = {accounts:[], keys:[], logs:[]};
+const el = id => document.getElementById(id);
+function token(){return el('admin').value.trim()}
+function fmt(n){return Number(n||0).toLocaleString()}
+function escapeHtml(s){return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function pill(status){const cls=status==='active'?'ok':(status==='expired'?'warn':'bad');return `<span class="pill ${cls}">${escapeHtml(status||'unknown')}</span>`}
+function showToast(msg){const t=el('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2200)}
+function showError(err){const b=el('errorBox');b.textContent=err.message||String(err);b.style.display='block'}
+function clearError(){el('errorBox').style.display='none'}
+function saveToken(){localStorage.setItem('cb2pai_admin_token', token()); showToast('Admin token saved'); loadAll()}
+async function api(path, opts={}){
+  clearError();
+  opts.headers = Object.assign({'Authorization':'Bearer '+token(),'Content-Type':'application/json'}, opts.headers||{});
+  const r = await fetch(path, opts);
+  const text = await r.text();
+  const j = text ? JSON.parse(text) : {};
+  if(!r.ok) throw new Error(JSON.stringify(j));
+  return j;
+}
+async function loadAll(){
+  try{
+    const [a,k,l] = await Promise.all([api('/admin/accounts'), api('/admin/api-keys'), api('/admin/logs?limit=50')]);
+    state.accounts=a.accounts||[]; state.keys=k.api_keys||[]; state.logs=l.logs||[]; render();
+  }catch(err){showError(err)}
+}
+async function addAccount(){
+  try{
+    const authType=el('authType').value, secret=el('secret').value.trim();
+    const body={name:el('accName').value,auth_type:authType,endpoint:el('endpoint').value,domain:el('domain').value,user_id:el('userId').value,status:el('status').value,weight:Number(el('weight').value||1),priority:Number(el('priority').value||0)};
+    if(authType==='api_key') body.api_key=secret; else body.access_token=secret;
+    await api('/admin/accounts',{method:'POST',body:JSON.stringify(body)});
+    el('secret').value=''; showToast('Account added'); await loadAll();
+  }catch(err){showError(err)}
+}
+async function createKey(){
+  try{
+    const allowed=el('allowedModels').value.split(',').map(x=>x.trim()).filter(Boolean);
+    const body={name:el('keyName').value,daily_limit:Number(el('dailyLimit').value||0)};
+    if(allowed.length) body.allowed_models=allowed;
+    const j=await api('/admin/api-keys',{method:'POST',body:JSON.stringify(body)});
+    el('newKey').textContent=j.key; el('clientKeyForConfig').value=j.key; el('newKeyBox').style.display='block';
+    updateConfigPreview(); showToast('Key created'); await loadAll();
+  }catch(err){showError(err)}
+}
+async function deleteAccount(id){if(!confirm('Delete account #'+id+'?'))return;try{await api('/admin/accounts/'+id,{method:'DELETE'});showToast('Account deleted');await loadAll()}catch(err){showError(err)}}
+async function setAccountStatus(id,status){try{await api('/admin/accounts/'+id,{method:'PUT',body:JSON.stringify({status})});showToast('Account updated');await loadAll()}catch(err){showError(err)}}
+async function testAccount(id){try{const j=await api('/admin/accounts/'+id+'/test',{method:'POST'});showToast(j.result==='json'?'Account test passed':'Account test returned '+j.result);await loadLogs()}catch(err){showError(err)}}
+async function deleteKey(id){if(!confirm('Delete API key #'+id+'?'))return;try{await api('/admin/api-keys/'+id,{method:'DELETE'});showToast('Key deleted');await loadAll()}catch(err){showError(err)}}
+async function loadLogs(){try{const l=await api('/admin/logs?limit=100');state.logs=l.logs||[];renderLogs()}catch(err){showError(err)}}
+async function testClientKey(){
+  try{
+    const r=await fetch('/v1/models',{headers:{'Authorization':'Bearer '+el('clientKeyForConfig').value.trim()}});
+    if(!r.ok) throw new Error(await r.text());
+    showToast('Client key works');
+  }catch(err){showError(err)}
+}
+function render(){renderStats();renderAccounts();renderKeys();renderLogs();updateConfigPreview()}
+function renderStats(){
+  el('statAccounts').textContent=state.accounts.length;
+  el('statActive').textContent=state.accounts.filter(a=>a.status==='active').length;
+  el('statKeys').textContent=state.keys.length;
+  el('statTokens').textContent=fmt(state.accounts.reduce((s,a)=>s+Number(a.total_tokens||0),0));
+}
+function renderAccounts(){
+  el('accountsBody').innerHTML=state.accounts.map(a=>`
+    <tr><td>${a.id}</td><td><b>${escapeHtml(a.name)}</b><br><span class="muted">${escapeHtml(a.domain)}</span></td><td>${pill(a.status)}</td><td>${escapeHtml(a.endpoint)}</td><td>${escapeHtml(a.auth_type)}<br><span class="muted">${a.has_api_key?'api key':''}${a.has_access_token?'token':''}</span></td><td>${fmt(a.total_requests)} req<br>${fmt(a.total_tokens)} tok</td><td>${a.last_error?escapeHtml(a.last_error):'<span class="muted">none</span>'}</td><td class="actions"><button class="secondary" onclick="testAccount(${a.id})">Test</button> <button class="secondary" onclick="setAccountStatus(${a.id},'${a.status==='active'?'disabled':'active'}')">${a.status==='active'?'Disable':'Enable'}</button> <button class="danger" onclick="deleteAccount(${a.id})">Delete</button></td></tr>`).join('')||'<tr><td colspan="8" class="muted">No accounts yet.</td></tr>';
+}
+function renderKeys(){
+  el('keysBody').innerHTML=state.keys.map(k=>`
+    <tr><td>${k.id}</td><td><b>${escapeHtml(k.name)}</b></td><td><code>${escapeHtml(k.key_prefix)}</code></td><td>${pill(k.status)}</td><td>${k.daily_limit?fmt(k.daily_limit)+' / day':'<span class="muted">none</span>'}<br><span class="muted">${escapeHtml((k.allowed_models||[]).join(', ')||'all models')}</span></td><td>${fmt(k.total_requests)} req<br>${fmt(k.total_tokens)} tok</td><td class="actions"><button class="danger" onclick="deleteKey(${k.id})">Delete</button></td></tr>`).join('')||'<tr><td colspan="7" class="muted">No client keys yet.</td></tr>';
+}
+function renderLogs(){
+  el('logsBody').innerHTML=state.logs.map(x=>`
+    <tr><td>${x.id}</td><td>${escapeHtml(x.client_key_name||'')}</td><td>${escapeHtml(x.account_name||'')}</td><td>${escapeHtml(x.model||'')}</td><td>${x.stream?'yes':'no'}</td><td>${fmt(x.total_tokens)}</td><td>${x.status_code}</td><td>${escapeHtml(x.finish_reason||'')}</td><td>${fmt(x.duration_ms)} ms</td><td>${x.error?escapeHtml(x.error):'<span class="muted">none</span>'}</td></tr>`).join('')||'<tr><td colspan="10" class="muted">No requests yet.</td></tr>';
+}
+function showTab(name){document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.tab===name));document.querySelectorAll('.panel').forEach(x=>x.classList.toggle('active',x.id==='panel-'+name))}
+function resetAccountForm(){el('secret').value='';el('accName').value='codebuddy-api-key';el('authType').value='api_key';el('endpoint').value='https://copilot.tencent.com';el('domain').value='copilot.tencent.com';el('userId').value='anonymous';el('status').value='active';el('weight').value='1';el('priority').value='0'}
+function updateConfigPreview(){const base=el('baseUrl').value||location.origin+'/v1',key=el('clientKeyForConfig').value||'sk-cb-...';el('configPreview').textContent=`OPENAI_BASE_URL=${base}\nOPENAI_API_KEY=${key}\n\nbase_url: ${base}\napi_key: ${key}`}
+function copyText(text){navigator.clipboard.writeText(text);showToast('Copied')}
+function copyCodexEnv(){updateConfigPreview();copyText(el('configPreview').textContent.split('\\n\\n')[0])}
+function copyCodexJson(){const base=el('baseUrl').value||location.origin+'/v1',key=el('clientKeyForConfig').value||'sk-cb-...';copyText(JSON.stringify({model_provider:{openai:{base_url:base,api_key:key}}},null,2))}
+el('admin').value=localStorage.getItem('cb2pai_admin_token')||'';el('baseUrl').value=location.origin+'/v1';el('baseUrl').addEventListener('input',updateConfigPreview);el('clientKeyForConfig').addEventListener('input',updateConfigPreview);updateConfigPreview();if(token())loadAll();
+</script>
+</body>
+</html>
