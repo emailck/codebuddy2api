@@ -32,6 +32,21 @@ PASSTHROUGH_BODY_KEYS = {
 }
 
 MODEL_ALIASES = {
+    "Auto": "auto",
+    "auto-chat": "auto",
+    "Hy3 preview": "hy3-preview",
+    "hy3 preview": "hy3-preview",
+    "hy3-preview": "hy3-preview",
+    "GLM-5v-Turbo": "glm-5v-turbo",
+    "GLM-5V-Turbo": "glm-5v-turbo",
+    "GLM-5.2": "glm-5.2",
+    "GLM-5.1": "glm-5.1",
+    "Kimi-K2.7-Code": "kimi-k2.7",
+    "Kimi-K2.7": "kimi-k2.7",
+    "Kimi-K2.6": "kimi-k2.6",
+    "MiniMax-M3": "minimax-m3",
+    "Deepseek-V4-Pro": "deepseek-v4-pro",
+    "Deepseek-V4-Flash": "deepseek-v4-flash",
     "gpt-4o": "glm-5.2",
     "gpt-4o-mini": "glm-5.1",
     "gpt-4": "glm-5.2",

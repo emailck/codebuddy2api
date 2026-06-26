@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
 from . import accounts, db, keys, proxy
-from .config import ADMIN_TOKEN
+from .config import ADMIN_TOKEN, MODEL_PROBE_CANDIDATES
 from .security import constant_equals
 
 app = FastAPI(title="codebuddy2api", version="0.1.0")
@@ -209,6 +209,82 @@ def admin_logs(limit: int = 100, _=Depends(require_admin)):
     limit = min(max(limit, 1), 500)
     logs = db.rows("SELECT * FROM request_logs ORDER BY id DESC LIMIT ?", (limit,))
     return {"logs": logs}
+
+
+@app.get("/admin/models")
+def admin_models(_=Depends(require_admin)):
+    return {
+        "models": db.get_setting("models", []),
+        "probe_candidates": db.get_setting("model_probe_candidates", MODEL_PROBE_CANDIDATES),
+    }
+
+
+@app.put("/admin/models")
+async def admin_update_models(request: Request, _=Depends(require_admin)):
+    data = await request.json()
+    models = normalize_model_list(data.get("models") or [])
+    if not models:
+        raise HTTPException(status_code=400, detail="models cannot be empty")
+    db.set_setting("models", models)
+    if "probe_candidates" in data:
+        candidates = normalize_model_list(data.get("probe_candidates") or [])
+        db.set_setting("model_probe_candidates", candidates)
+    return {"models": db.get_setting("models", []), "probe_candidates": db.get_setting("model_probe_candidates", MODEL_PROBE_CANDIDATES)}
+
+
+@app.post("/admin/models/probe")
+async def admin_probe_models(request: Request, _=Depends(require_admin)):
+    data = await request.json()
+    account_id = int(data.get("account_id") or 0)
+    account = accounts.get_account(account_id, include_secret=True) if account_id else accounts.pick_account()
+    if account and not account.get("api_key") and not account.get("access_token"):
+        account = accounts.get_account(account["id"], include_secret=True)
+    if not account:
+        raise HTTPException(status_code=404, detail="account not found")
+    candidates = normalize_model_list(data.get("models") or db.get_setting("model_probe_candidates", MODEL_PROBE_CANDIDATES))
+    if not candidates:
+        raise HTTPException(status_code=400, detail="models cannot be empty")
+    results = []
+    available = []
+    for model in candidates[:50]:
+        resolved_model = proxy.resolve_model(model)
+        result = await proxy.collect_upstream(
+            f"{accounts.normalize_endpoint(account.get('endpoint'))}/v2/chat/completions",
+            accounts.build_headers(account),
+            proxy.build_chat_body({"model": model, "messages": [{"role": "user", "content": "ping"}]}),
+            account,
+            None,
+            f"model-probe:{model}",
+            __import__("time").time(),
+        )
+        item = {"model": model, "resolved_model": resolved_model, "ok": result[0] == "json"}
+        if result[0] == "json":
+            available.append(model)
+            item["response_model"] = result[1].get("model")
+            item["total_tokens"] = (result[1].get("usage") or {}).get("total_tokens")
+        else:
+            status, detail = result[1]
+            item["status"] = status
+            item["error"] = ((detail.get("error") or {}).get("message") if isinstance(detail, dict) else str(detail))[:500]
+        results.append(item)
+    if data.get("save"):
+        db.set_setting("models", available)
+    return {"account_id": account.get("id"), "available": available, "results": results, "saved": bool(data.get("save"))}
+
+
+def normalize_model_list(value) -> list[str]:
+    if isinstance(value, str):
+        value = value.replace("\r", "\n").replace(",", "\n").split("\n")
+    if not isinstance(value, list):
+        return []
+    out = []
+    seen = set()
+    for item in value:
+        model = str(item).strip()
+        if model and model not in seen:
+            out.append(model)
+            seen.add(model)
+    return out
 
 
 @app.get("/", response_class=HTMLResponse)

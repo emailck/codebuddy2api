@@ -19,17 +19,27 @@ if not DB_PATH.is_absolute():
 
 DEFAULT_ENDPOINT = get_env("CB2PAI_DEFAULT_ENDPOINT", "https://www.codebuddy.ai").rstrip("/")
 DEFAULT_MODELS = [
-    "auto-chat",
-    "auto",
-    "glm-5.2",
-    "glm-5.1",
-    "glm-5v-turbo",
-    "kimi-k2.7",
-    "kimi-k2.6",
-    "deepseek-v4-pro",
-    "deepseek-v4-flash",
-    "gpt-5",
-    "gpt-5-mini",
-    "claude-4.0",
-    "gemini-2.5-pro",
+    "Auto",
+    "Hy3 preview",
+    "GLM-5v-Turbo",
+    "GLM-5.2",
+    "GLM-5.1",
+    "Kimi-K2.7-Code",
+    "Kimi-K2.6",
+    "MiniMax-M3",
+    "Deepseek-V4-Pro",
+    "Deepseek-V4-Flash",
+]
+
+MODEL_PROBE_CANDIDATES = [
+    "Auto",
+    "Hy3 preview",
+    "GLM-5v-Turbo",
+    "GLM-5.2",
+    "GLM-5.1",
+    "Kimi-K2.7-Code",
+    "Kimi-K2.6",
+    "MiniMax-M3",
+    "Deepseek-V4-Pro",
+    "Deepseek-V4-Flash",
 ]

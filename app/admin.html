@@ -67,6 +67,7 @@
   <div class="tabs">
     <button class="tab active" data-tab="accounts" onclick="showTab('accounts')">Accounts</button>
     <button class="tab" data-tab="keys" onclick="showTab('keys')">API Keys</button>
+    <button class="tab" data-tab="models" onclick="showTab('models')">Models</button>
     <button class="tab" data-tab="codex" onclick="showTab('codex')">Codex Config</button>
     <button class="tab" data-tab="logs" onclick="showTab('logs')">Logs</button>
   </div>
@@ -123,6 +124,32 @@
     </div>
   </section>
 
+  <section id="panel-models" class="panel">
+    <div class="split">
+      <div>
+        <h2>Published Models</h2>
+        <p class="muted" style="margin-bottom:10px">These models are returned by /v1/models.</p>
+        <textarea id="modelsText" style="min-height:220px" placeholder="One model per line"></textarea>
+        <div class="row" style="margin-top:10px">
+          <button onclick="saveModels()">Save Models</button>
+          <button class="secondary" onclick="loadModels()">Reload</button>
+        </div>
+      </div>
+      <div>
+        <h2>Probe Upstream</h2>
+        <p class="muted" style="margin-bottom:10px">Probe sends tiny real requests to CodeBuddy and marks models that work for the selected account.</p>
+        <label>Account</label><select id="probeAccount"></select>
+        <label>Candidate Models</label>
+        <textarea id="probeModelsText" style="min-height:160px" placeholder="One model per line"></textarea>
+        <div class="row" style="margin-top:10px">
+          <button onclick="probeModels(false)">Probe</button>
+          <button class="secondary" onclick="probeModels(true)">Probe & Save Available</button>
+        </div>
+        <pre id="probeResult" style="margin-top:10px"></pre>
+      </div>
+    </div>
+  </section>
+
   <section id="panel-codex" class="panel">
     <h2>Codex / OpenAI Config</h2>
     <div class="grid">
@@ -152,7 +179,7 @@
 </main>
 <div id="toast" class="toast"></div>
 <script>
-let state = {accounts:[], keys:[], logs:[]};
+let state = {accounts:[], keys:[], logs:[], models:[], probe_candidates:[]};
 const el = id => document.getElementById(id);
 function token(){return el('admin').value.trim()}
 function fmt(n){return Number(n||0).toLocaleString()}
@@ -173,8 +200,8 @@ async function api(path, opts={}){
 }
 async function loadAll(){
   try{
-    const [a,k,l] = await Promise.all([api('/admin/accounts'), api('/admin/api-keys'), api('/admin/logs?limit=50')]);
-    state.accounts=a.accounts||[]; state.keys=k.api_keys||[]; state.logs=l.logs||[]; render();
+    const [a,k,l,m] = await Promise.all([api('/admin/accounts'), api('/admin/api-keys'), api('/admin/logs?limit=50'), api('/admin/models')]);
+    state.accounts=a.accounts||[]; state.keys=k.api_keys||[]; state.logs=l.logs||[]; state.models=m.models||[]; state.probe_candidates=m.probe_candidates||[]; render();
   }catch(err){showError(err)}
 }
 async function addAccount(){
@@ -201,6 +228,24 @@ async function setAccountStatus(id,status){try{await api('/admin/accounts/'+id,{
 async function testAccount(id){try{const j=await api('/admin/accounts/'+id+'/test',{method:'POST'});showToast(j.result==='json'?'Account test passed':'Account test returned '+j.result);await loadLogs()}catch(err){showError(err)}}
 async function deleteKey(id){if(!confirm('Delete API key #'+id+'?'))return;try{await api('/admin/api-keys/'+id,{method:'DELETE'});showToast('Key deleted');await loadAll()}catch(err){showError(err)}}
 async function loadLogs(){try{const l=await api('/admin/logs?limit=100');state.logs=l.logs||[];renderLogs()}catch(err){showError(err)}}
+async function loadModels(){try{const m=await api('/admin/models');state.models=m.models||[];state.probe_candidates=m.probe_candidates||[];renderModels();showToast('Models loaded')}catch(err){showError(err)}}
+async function saveModels(){
+  try{
+    const body={models:linesFrom(el('modelsText').value),probe_candidates:linesFrom(el('probeModelsText').value)};
+    const m=await api('/admin/models',{method:'PUT',body:JSON.stringify(body)});
+    state.models=m.models||[];state.probe_candidates=m.probe_candidates||[];renderModels();showToast('Models saved');
+  }catch(err){showError(err)}
+}
+async function probeModels(save){
+  try{
+    el('probeResult').textContent='Probing...';
+    const body={account_id:Number(el('probeAccount').value||0),models:linesFrom(el('probeModelsText').value),save};
+    const r=await api('/admin/models/probe',{method:'POST',body:JSON.stringify(body)});
+    if(save){state.models=r.available||[];renderModels()}
+    el('probeResult').textContent=JSON.stringify(r,null,2);
+    showToast(save?'Probe saved':'Probe finished');
+  }catch(err){showError(err)}
+}
 async function testClientKey(){
   try{
     const r=await fetch('/v1/models',{headers:{'Authorization':'Bearer '+el('clientKeyForConfig').value.trim()}});
@@ -208,7 +253,7 @@ async function testClientKey(){
     showToast('Client key works');
   }catch(err){showError(err)}
 }
-function render(){renderStats();renderAccounts();renderKeys();renderLogs();updateConfigPreview()}
+function render(){renderStats();renderAccounts();renderKeys();renderModels();renderLogs();updateConfigPreview()}
 function renderStats(){
   el('statAccounts').textContent=state.accounts.length;
   el('statActive').textContent=state.accounts.filter(a=>a.status==='active').length;
@@ -223,6 +268,11 @@ function renderKeys(){
   el('keysBody').innerHTML=state.keys.map(k=>`
     <tr><td>${k.id}</td><td><b>${escapeHtml(k.name)}</b></td><td><code>${escapeHtml(k.key_prefix)}</code></td><td>${pill(k.status)}</td><td>${k.daily_limit?fmt(k.daily_limit)+' / day':'<span class="muted">none</span>'}<br><span class="muted">${escapeHtml((k.allowed_models||[]).join(', ')||'all models')}</span></td><td>${fmt(k.total_requests)} req<br>${fmt(k.total_tokens)} tok</td><td class="actions"><button class="danger" onclick="deleteKey(${k.id})">Delete</button></td></tr>`).join('')||'<tr><td colspan="7" class="muted">No client keys yet.</td></tr>';
 }
+function renderModels(){
+  el('modelsText').value=(state.models||[]).join('\n');
+  el('probeModelsText').value=(state.probe_candidates||state.models||[]).join('\n');
+  el('probeAccount').innerHTML='<option value="0">Auto pick active account</option>'+state.accounts.map(a=>`<option value="${a.id}">#${a.id} ${escapeHtml(a.name)} (${escapeHtml(a.status)})</option>`).join('');
+}
 function renderLogs(){
   el('logsBody').innerHTML=state.logs.map(x=>`
     <tr><td>${x.id}</td><td>${escapeHtml(x.client_key_name||'')}</td><td>${escapeHtml(x.account_name||'')}</td><td>${escapeHtml(x.model||'')}</td><td>${x.stream?'yes':'no'}</td><td>${fmt(x.total_tokens)}</td><td>${x.status_code}</td><td>${escapeHtml(x.finish_reason||'')}</td><td>${fmt(x.duration_ms)} ms</td><td>${x.error?escapeHtml(x.error):'<span class="muted">none</span>'}</td></tr>`).join('')||'<tr><td colspan="10" class="muted">No requests yet.</td></tr>';
@@ -230,6 +280,7 @@ function renderLogs(){
 function showTab(name){document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.tab===name));document.querySelectorAll('.panel').forEach(x=>x.classList.toggle('active',x.id==='panel-'+name))}
 function resetAccountForm(){el('secret').value='';el('accName').value='codebuddy-api-key';el('authType').value='api_key';el('endpoint').value='https://copilot.tencent.com';el('domain').value='copilot.tencent.com';el('userId').value='anonymous';el('status').value='active';el('weight').value='1';el('priority').value='0'}
 function updateConfigPreview(){const base=el('baseUrl').value||location.origin+'/v1',key=el('clientKeyForConfig').value||'sk-cb-...';el('configPreview').textContent=`OPENAI_BASE_URL=${base}\nOPENAI_API_KEY=${key}\n\nbase_url: ${base}\napi_key: ${key}`}
+function linesFrom(text){return String(text||'').split(/[,\n]/).map(x=>x.trim()).filter(Boolean)}
 function copyText(text){navigator.clipboard.writeText(text);showToast('Copied')}
 function copyCodexEnv(){updateConfigPreview();copyText(el('configPreview').textContent.split('\\n\\n')[0])}
 function copyCodexJson(){const base=el('baseUrl').value||location.origin+'/v1',key=el('clientKeyForConfig').value||'sk-cb-...';copyText(JSON.stringify({model_provider:{openai:{base_url:base,api_key:key}}},null,2))}
