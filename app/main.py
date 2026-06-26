@@ -164,7 +164,7 @@ async def admin_test_account(account_id: int, _=Depends(require_admin)):
     result = await proxy.collect_upstream(
         f"{accounts.normalize_endpoint(account.get('endpoint'))}/v2/chat/completions",
         accounts.build_headers(account),
-        proxy.build_chat_body({"model": "auto-chat", "messages": [{"role": "user", "content": "ping"}]}),
+        proxy.build_chat_body({"model": "glm-5.1", "messages": [{"role": "user", "content": "ping"}]}),
         account,
         None,
         "account-test",
