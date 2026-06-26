@@ -70,11 +70,7 @@ async def chat_completions(request: Request, client_key: Optional[dict] = Depend
     payload = await request.json()
     if not payload.get("messages"):
         raise HTTPException(status_code=400, detail={"error": {"message": "messages is required", "type": "invalid_request_error"}})
-    if client_key and client_key.get("allowed_models"):
-        model = str(payload.get("model") or "auto-chat")
-        resolved = proxy.resolve_model(model)
-        if model not in client_key["allowed_models"] and resolved not in client_key["allowed_models"]:
-            raise HTTPException(status_code=403, detail={"error": {"message": f"Model {model} not allowed", "type": "invalid_request_error"}})
+    enforce_allowed_model(payload, client_key)
     result = await proxy.proxy_chat(payload, client_key)
     return format_proxy_result(result)
 
@@ -82,6 +78,7 @@ async def chat_completions(request: Request, client_key: Optional[dict] = Depend
 @app.post("/v1/responses")
 async def responses(request: Request, client_key: Optional[dict] = Depends(require_client_key)):
     payload = await request.json()
+    enforce_allowed_model(payload, client_key)
     result = await proxy.proxy_responses(payload, client_key)
     return format_proxy_result(result)
 
@@ -89,6 +86,7 @@ async def responses(request: Request, client_key: Optional[dict] = Depends(requi
 @app.post("/responses")
 async def bare_responses(request: Request, client_key: Optional[dict] = Depends(require_client_key)):
     payload = await request.json()
+    enforce_allowed_model(payload, client_key)
     result = await proxy.proxy_responses(payload, client_key)
     return format_proxy_result(result)
 
@@ -96,6 +94,7 @@ async def bare_responses(request: Request, client_key: Optional[dict] = Depends(
 @app.post("/responses/compact")
 async def bare_responses_compact(request: Request, client_key: Optional[dict] = Depends(require_client_key)):
     payload = await request.json()
+    enforce_allowed_model(payload, client_key)
     result = await proxy.proxy_responses(payload, client_key)
     return format_proxy_result(result)
 
@@ -103,6 +102,7 @@ async def bare_responses_compact(request: Request, client_key: Optional[dict] = 
 @app.post("/backend-api/codex/responses")
 async def codex_responses(request: Request, client_key: Optional[dict] = Depends(require_client_key)):
     payload = await request.json()
+    enforce_allowed_model(payload, client_key)
     result = await proxy.proxy_responses(payload, client_key)
     return format_proxy_result(result)
 
@@ -110,8 +110,18 @@ async def codex_responses(request: Request, client_key: Optional[dict] = Depends
 @app.post("/backend-api/codex/responses/compact")
 async def codex_responses_compact(request: Request, client_key: Optional[dict] = Depends(require_client_key)):
     payload = await request.json()
+    enforce_allowed_model(payload, client_key)
     result = await proxy.proxy_responses(payload, client_key)
     return format_proxy_result(result)
+
+
+def enforce_allowed_model(payload: dict, client_key: Optional[dict]) -> None:
+    if not client_key or not client_key.get("allowed_models"):
+        return
+    model = str(payload.get("model") or "auto-chat")
+    resolved = proxy.resolve_model(model)
+    if model not in client_key["allowed_models"] and resolved not in client_key["allowed_models"]:
+        raise HTTPException(status_code=403, detail={"error": {"message": f"Model {model} not allowed", "type": "invalid_request_error"}})
 
 
 def format_proxy_result(result):
